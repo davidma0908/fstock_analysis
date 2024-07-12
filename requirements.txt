@@ -1,0 +1,4 @@
+finlab
+pandas
+matplotlib
+plotly
