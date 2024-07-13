@@ -1,78 +1,83 @@
-import pandas as pd
 import streamlit as st
-import yfinance
+import yfinance as yf
+import pandas as pd
 
-@st.cache
-def load_data():
-    components = pd.read_html('https://en.wikipedia.org/wiki/List_of_S'
-                    '%26P_500_companies')[0]
-    return components.drop('SEC filings', axis=1).set_index('Symbol')
+# Function to get stock news (using yfinance library)
+def get_stock_news(ticker):
+    stock = yf.Ticker(ticker)
+    return stock.news
+
+# Function to get stock financials data
+def get_stock_financials(ticker):
+    stock = yf.Ticker(ticker)
+    return stock.financials, stock.balance_sheet, stock.cashflow
+
+# Function to get stock historical data
+def get_stock_historical_data(ticker, period='1y'):
+    stock = yf.Ticker(ticker)
+    return stock.history(period=period)
+
+# Function to get stock name and current price
+def get_stock_info(ticker):
+    stock = yf.Ticker(ticker)
+    name = stock.info['shortName']
+    price = stock.history(period='1d')['Close'].iloc[-1]  # Current closing price
+    return name, price
 
 
-@st.cache
-def load_quotes(asset):
-    return yfinance.download(asset)
+# Apply center alignment to the title using Markdown with HTML
+st.markdown('<h1 style="text-align: center; margin-bottom: 20px; '
+            'color: #1f77b4; text-shadow: 2px 2px #aaaaaa;">'
+            'Stock Information App</h1>', unsafe_allow_html=True)
 
+# User input for stock ticker
+ticker = st.text_input('Enter Stock Ticker (e.g., AAPL, MSFT):', 'AAPL')
 
-components = load_data()
-title = st.empty()
-st.sidebar.title("Options")
+if ticker:
+    # Display stock name and current price in large font
+    name, price = get_stock_info(ticker)
+    st.markdown(f'<h1 style="text-align: center; margin-bottom: 10px;">{name}</h1>', unsafe_allow_html=True)
+    st.markdown(f'<h2 style="text-align: center; margin-bottom: 20px;">Current Price: ₹{price:.2f}</h2>', unsafe_allow_html=True)
 
-def label(symbol):
-    a = components.loc[symbol]
-    return symbol + ' - ' + a.Security
+    # Display stock news
+    st.header('Stock News')
+    
+    # Fetch and display news
+    news = get_stock_news(ticker)
+    if news:
+        for article in news:
+            st.markdown(
+                f'<div style="border: 1px solid #e6e6e6; border-radius: 5px; padding: 10px; margin-bottom: 10px;">'
+                f'<h4>{article["title"]}</h4>'
+                f'<p style="color: #666666;">{article["publisher"]}</p>'
+                f'<a href="{article["link"]}" target="_blank">Read more</a>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+    else:
+        st.write('No news found.')
 
-if st.sidebar.checkbox('View companies list'):
-    st.dataframe(components[['Security',
-                             'GICS Sector',
-                             'Date first added',
-                             'Founded']])
+    # Display stock financials
+    st.header('Stock Financials Data')
+    financials, balance_sheet, cashflow = get_stock_financials(ticker)
 
-st.sidebar.subheader('Select asset')
-asset = st.sidebar.selectbox('Click below to select a new asset',
-                             components.index.sort_values(), index=3,
-                             format_func=label)
-title.title(components.loc[asset].Security)
-if st.sidebar.checkbox('View company info', True):
-    st.table(components.loc[asset])
-data0 = load_quotes(asset)
-data = data0.copy().dropna()
-data.index.name = None
+    st.subheader('Income Statement')
+    st.write(financials)
 
-section = st.sidebar.slider('Number of quotes', min_value=30,
-                    max_value=min([2000, data.shape[0]]),
-                    value=500,  step=10)
+    st.subheader('Balance Sheet')
+    st.write(balance_sheet)
 
-data2 = data[-section:]['Adj Close'].to_frame('Adj Close')
+    st.subheader('Cash Flow')
+    st.write(cashflow)
 
-sma = st.sidebar.checkbox('SMA')
-if sma:
-    period= st.sidebar.slider('SMA period', min_value=5, max_value=500,
-                         value=20,  step=1)
-    data[f'SMA {period}'] = data['Adj Close'].rolling(period ).mean()
-    data2[f'SMA {period}'] = data[f'SMA {period}'].reindex(data2.index)
+    # Display stock historical data
+    st.header('Stock Historical Data')
+    period = st.selectbox('Select Period:', ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max'])
+    historical_data = get_stock_historical_data(ticker, period)
+    st.write(historical_data)
+    
+    # Plot historical data
+    st.line_chart(historical_data['Close'])
 
-sma2 = st.sidebar.checkbox('SMA2')
-if sma2:
-    period2= st.sidebar.slider('SMA2 period', min_value=5, max_value=500,
-                         value=100,  step=1)
-    data[f'SMA2 {period2}'] = data['Adj Close'].rolling(period2).mean()
-    data2[f'SMA2 {period2}'] = data[f'SMA2 {period2}'].reindex(data2.index)
-
-st.subheader('Chart')
-st.line_chart(data2)
-
-if st.sidebar.checkbox('View stadistic'):
-    st.subheader('Stadistic')
-    st.table(data2.describe())
-
-if st.sidebar.checkbox('View quotes'):
-    st.subheader(f'{asset} historical data')
-    st.write(data2)
-
-st.sidebar.title("About")
-st.sidebar.info('This app is a simple example of '
-                'using Strealit to create a financial data web app.\n'
-                '\nIt is maintained by [Paduel]('
-                'https://twitter.com/paduel_py).\n\n'
-                'Check the code at https://github.com/paduel/streamlit_finance_chart')
+# Thank you message
+st.markdown('<h3 style="text-align: center; margin-top: 20px;">Thank You For Visiting</h3>', unsafe_allow_html=True)
